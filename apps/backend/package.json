@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "nest start --watch",
-    "build": "nest build",
+    "build": "nest build && prisma generate",
     "start": "node dist/main",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\"",
     "test": "jest",
@@ -14,6 +14,7 @@
     "prisma:generate": "prisma generate"
   },
   "dependencies": {
+    "@nestjs/cli": "^10.3.2",
     "@nestjs/common": "^10.3.9",
     "@nestjs/config": "^3.2.2",
     "@nestjs/core": "^10.3.9",
@@ -36,17 +37,16 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "uuid": "^10.0.0",
-    "axios": "^1.7.2"
+    "axios": "^1.7.2",
+    "prisma": "^5.15.0",
+    "typescript": "^5.4.5"
   },
   "devDependencies": {
-    "@nestjs/cli": "^10.3.2",
     "@nestjs/testing": "^10.3.9",
     "@types/bcrypt": "^5.0.2",
     "@types/multer": "^1.4.11",
     "@types/nodemailer": "^6.4.15",
     "@types/passport-jwt": "^4.0.1",
-    "@types/pdf-parse": "^1.1.4",
-    "prisma": "^5.15.0",
-    "typescript": "^5.4.5"
+    "@types/pdf-parse": "^1.1.4"
   }
 }

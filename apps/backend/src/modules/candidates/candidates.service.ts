@@ -1,18 +1,79 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AIService } from '../ai/ai.service';
+import { CreateCandidateDto } from './dto/create-candidate.dto';
+import { UpdateCandidateDto } from './dto/update-candidate.dto';
 import * as pdfParse from 'pdf-parse';
 
 @Injectable()
 export class CandidatesService {
   constructor(
     private prisma: PrismaService,
-    private ai: AIService
+    private ai: AIService,
   ) {}
 
-  async processResume(candidateId: string, fileBuffer: Buffer, mimeType: string) {
-    let text = '';
+  async create(dto: CreateCandidateDto) {
+    return this.prisma.candidate.create({ data: dto });
+  }
 
+  async findAll(search?: string) {
+    if (search) {
+      return this.prisma.$queryRaw`
+        SELECT
+          id, name, email, phone,
+          "linkedinUrl", "githubUrl", "portfolioUrl",
+          "resumeUrl", "aiSummary", source,
+          "createdAt", "updatedAt",
+          ts_rank(
+            to_tsvector('portuguese',
+              COALESCE("resumeText", '') || ' ' || name || ' ' || email
+            ),
+            plainto_tsquery('portuguese', ${search})
+          ) AS rank
+        FROM candidates
+        WHERE
+          to_tsvector('portuguese',
+            COALESCE("resumeText", '') || ' ' || name || ' ' || email
+          ) @@ plainto_tsquery('portuguese', ${search})
+        ORDER BY rank DESC
+        LIMIT 30
+      `;
+    }
+    return this.prisma.candidate.findMany({
+      select: {
+        id: true, name: true, email: true, phone: true,
+        linkedinUrl: true, githubUrl: true, portfolioUrl: true,
+        resumeUrl: true, aiSummary: true, source: true,
+        createdAt: true, updatedAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async findOne(id: string) {
+    const candidate = await this.prisma.candidate.findUnique({
+      where: { id },
+      include: {
+        applications: {
+          include: {
+            job: { select: { id: true, title: true, status: true } },
+            stage: true,
+          },
+          orderBy: { appliedAt: 'desc' },
+        },
+      },
+    });
+    if (!candidate) throw new NotFoundException('Candidato não encontrado');
+    return candidate;
+  }
+
+  async update(id: string, dto: UpdateCandidateDto) {
+    await this.findOne(id);
+    return this.prisma.candidate.update({ where: { id }, data: dto });
+  }
+
+  async processResume(candidateId: string, fileBuffer: Buffer, mimeType: string, fileUrl: string) {
+    let text = '';
     if (mimeType === 'application/pdf') {
       const parsed = await pdfParse(fileBuffer);
       text = parsed.text;
@@ -25,26 +86,11 @@ export class CandidatesService {
       this.ai.summarizeCandidate(text),
     ]);
 
-    await this.prisma.candidate.update({
+    return this.prisma.candidate.update({
       where: { id: candidateId },
-      data: { resumeText: text, parsedResume, aiSummary },
+      data: { resumeText: text, parsedResume, aiSummary, resumeUrl: fileUrl },
+      select: { id: true, name: true, aiSummary: true, parsedResume: true },
     });
-
-    return { parsedResume, aiSummary };
-  }
-
-  async search(query: string) {
-    // PostgreSQL Full Text Search — sem ElasticSearch
-    return this.prisma.$queryRaw`
-      SELECT id, name, email, "aiSummary", "resumeText",
-             ts_rank(to_tsvector('portuguese', COALESCE("resumeText", '') || ' ' || name || ' ' || email),
-                     plainto_tsquery('portuguese', ${query})) AS rank
-      FROM candidates
-      WHERE to_tsvector('portuguese', COALESCE("resumeText", '') || ' ' || name || ' ' || email)
-            @@ plainto_tsquery('portuguese', ${query})
-      ORDER BY rank DESC
-      LIMIT 20
-    `;
   }
 
   async rankForJob(candidateId: string, jobId: string) {
@@ -52,23 +98,19 @@ export class CandidatesService {
       this.prisma.candidate.findUnique({ where: { id: candidateId } }),
       this.prisma.job.findUnique({ where: { id: jobId } }),
     ]);
+    if (!candidate) throw new NotFoundException('Candidato não encontrado');
+    if (!job) throw new NotFoundException('Vaga não encontrada');
 
-    if (!candidate || !job) throw new Error('Candidato ou vaga não encontrada');
+    const profile = `Nome: ${candidate.name}\nEmail: ${candidate.email}\nResumo: ${candidate.aiSummary ?? ''}\nCurrículo: ${(candidate.resumeText ?? '').slice(0, 3000)}`;
+    const jobDesc = `Título: ${job.title}\n\nDescrição:\n${job.description}\n\nRequisitos:\n${job.requirements ?? ''}`;
 
-    const profile = `Nome: ${candidate.name}\nResumo IA: ${candidate.aiSummary}\nTexto do currículo: ${candidate.resumeText?.slice(0, 2000)}`;
-    const jobDesc = `${job.title}\n${job.description}\nRequisitos: ${job.requirements}`;
+    const ranking = await this.ai.rankCandidate(profile, jobDesc);
 
-    return this.ai.rankCandidate(profile, jobDesc);
-  }
-
-  async findAll() {
-    return this.prisma.candidate.findMany({ orderBy: { createdAt: 'desc' } });
-  }
-
-  async findOne(id: string) {
-    return this.prisma.candidate.findUnique({
-      where: { id },
-      include: { applications: { include: { job: true, stage: true } } },
+    await this.prisma.application.updateMany({
+      where: { candidateId, jobId },
+      data: { aiScore: ranking.score },
     });
+
+    return ranking;
   }
 }

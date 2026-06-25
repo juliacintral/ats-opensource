@@ -1,18 +1,39 @@
 import { Module, Global } from '@nestjs/common';
-import { Redis } from 'ioredis';
 
 /**
- * RedisModule com fallback para Upstash (serverless-friendly)
- * Suporta tanto REDIS_URL (ioredis padrão) quanto UPSTASH_REDIS_REST_URL
+ * RedisModule STUB para MVP sem Redis
+ * Quando REDIS_URL não está configurado, usa cache em memória simples
+ * Substitua por ioredis real quando quiser adicionar Redis
  */
 
 export const REDIS_CLIENT = 'REDIS_CLIENT';
 
-// Singleton para reutilizar entre warm invocations
-declare global {
-  // eslint-disable-next-line no-var
-  var __redis: Redis | undefined;
-}
+// Cache em memória simples (substitui Redis no MVP)
+const memoryCache = new Map<string, { value: string; expiresAt: number }>();
+
+const inMemoryRedis = {
+  async get(key: string): Promise<string | null> {
+    const entry = memoryCache.get(key);
+    if (!entry) return null;
+    if (Date.now() > entry.expiresAt) {
+      memoryCache.delete(key);
+      return null;
+    }
+    return entry.value;
+  },
+  async set(key: string, value: string, mode?: string, ttl?: number): Promise<'OK'> {
+    const expiresAt = ttl ? Date.now() + ttl * 1000 : Date.now() + 86400000;
+    memoryCache.set(key, { value, expiresAt });
+    return 'OK';
+  },
+  async del(key: string): Promise<number> {
+    memoryCache.delete(key);
+    return 1;
+  },
+  async setex(key: string, ttl: number, value: string): Promise<'OK'> {
+    return inMemoryRedis.set(key, value, 'EX', ttl);
+  },
+};
 
 @Global()
 @Module({
@@ -20,32 +41,23 @@ declare global {
     {
       provide: REDIS_CLIENT,
       useFactory: () => {
-        if (global.__redis) return global.__redis;
+        const redisUrl = process.env.REDIS_URL;
 
-        const url = process.env.REDIS_URL || process.env.UPSTASH_REDIS_URL || 'redis://localhost:6379';
+        if (!redisUrl) {
+          // MVP sem Redis — usa cache em memória
+          console.log('[Redis] Sem REDIS_URL configurado — usando cache em memória (MVP mode)');
+          return inMemoryRedis;
+        }
 
-        const client = new Redis(url, {
+        // Com REDIS_URL — usa ioredis real (instala quando precisar)
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { Redis } = require('ioredis');
+        return new Redis(redisUrl, {
           maxRetriesPerRequest: 3,
           enableReadyCheck: false,
           lazyConnect: true,
-          // Configurações recomendadas para serverless
           connectTimeout: 5000,
-          commandTimeout: 5000,
-          retryStrategy: (times) => {
-            if (times > 3) return null;
-            return Math.min(times * 200, 2000);
-          },
         });
-
-        client.on('error', (err) => {
-          console.error('[Redis] Connection error:', err.message);
-        });
-
-        if (process.env.NODE_ENV === 'production') {
-          global.__redis = client;
-        }
-
-        return client;
       },
     },
   ],

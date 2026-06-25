@@ -1,13 +1,16 @@
-import { IsBoolean, IsOptional, IsString, IsNumber } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsBoolean, IsEnum, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 
 export class CreateJobDto {
   @ApiProperty() @IsString() title: string;
   @ApiProperty() @IsString() description: string;
-  @ApiProperty({ required: false }) @IsOptional() @IsString() requirements?: string;
-  @ApiProperty({ required: false }) @IsOptional() @IsString() location?: string;
-  @ApiProperty({ required: false }) @IsOptional() @IsBoolean() isRemote?: boolean;
-  @ApiProperty({ required: false }) @IsOptional() @IsNumber() salaryMin?: number;
-  @ApiProperty({ required: false }) @IsOptional() @IsNumber() salaryMax?: number;
-  @ApiProperty({ required: false }) @IsOptional() @IsString() department?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() requirements?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() location?: string;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() isRemote?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) @Transform(({ value }) => Number(value)) salaryMin?: number;
+  @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) @Transform(({ value }) => Number(value)) salaryMax?: number;
+  @ApiPropertyOptional() @IsOptional() @IsString() salaryCurrency?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() department?: string;
+  @ApiPropertyOptional({ enum: ['DRAFT', 'OPEN'] }) @IsOptional() @IsEnum(['DRAFT', 'OPEN']) status?: string;
 }

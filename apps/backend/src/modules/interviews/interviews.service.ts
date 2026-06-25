@@ -1,25 +1,44 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { EmailService } from '../email/email.service';
 import { CreateInterviewDto } from './dto/create-interview.dto';
 import { CreateFeedbackDto } from './dto/create-feedback.dto';
 
 @Injectable()
 export class InterviewsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private email: EmailService,
+  ) {}
 
   async schedule(dto: CreateInterviewDto, interviewerId: string) {
-    return this.prisma.interview.create({
+    const interview = await this.prisma.interview.create({
       data: { ...dto, interviewerId, scheduledAt: new Date(dto.scheduledAt) },
       include: {
         interviewer: { select: { id: true, name: true, email: true } },
         application: {
           include: {
-            candidate: { select: { id: true, name: true } },
+            candidate: { select: { id: true, name: true, email: true } },
             job: { select: { id: true, title: true } },
           },
         },
       },
     });
+
+    // Notifica candidato por e-mail
+    const candidate = interview.application?.candidate;
+    const job = interview.application?.job;
+    if (candidate?.email && job) {
+      this.email.sendInterviewScheduled(
+        candidate.email,
+        candidate.name,
+        job.title,
+        interview.scheduledAt,
+        interview.meetingUrl ?? undefined,
+      ).catch(() => {});
+    }
+
+    return interview;
   }
 
   async findByApplication(applicationId: string) {
@@ -60,19 +79,9 @@ export class InterviewsService {
   async submitFeedback(interviewId: string, dto: CreateFeedbackDto, authorId: string) {
     const interview = await this.prisma.interview.findUnique({ where: { id: interviewId } });
     if (!interview) throw new NotFoundException('Entrevista não encontrada');
-
-    await this.prisma.interview.update({
-      where: { id: interviewId },
-      data: { status: 'COMPLETED' },
-    });
-
+    await this.prisma.interview.update({ where: { id: interviewId }, data: { status: 'COMPLETED' } });
     return this.prisma.feedback.create({
-      data: {
-        interviewId,
-        applicationId: interview.applicationId,
-        authorId,
-        ...dto,
-      },
+      data: { interviewId, applicationId: interview.applicationId, authorId, ...dto },
       include: { author: { select: { id: true, name: true } } },
     });
   }

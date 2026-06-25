@@ -1,9 +1,13 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { EmailService } from '../email/email.service';
 
 @Injectable()
 export class ApplicationsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private email: EmailService,
+  ) {}
 
   async apply(jobId: string, candidateId: string) {
     const exists = await this.prisma.application.findUnique({
@@ -11,13 +15,12 @@ export class ApplicationsService {
     });
     if (exists) throw new ConflictException('Candidato já aplicou para esta vaga');
 
-    // Coloca no primeiro estágio da vaga automaticamente
-    const firstStage = await this.prisma.stage.findFirst({
-      where: { jobId },
-      orderBy: { order: 'asc' },
-    });
+    const [job, firstStage] = await Promise.all([
+      this.prisma.job.findUnique({ where: { id: jobId } }),
+      this.prisma.stage.findFirst({ where: { jobId }, orderBy: { order: 'asc' } }),
+    ]);
 
-    return this.prisma.application.create({
+    const application = await this.prisma.application.create({
       data: { jobId, candidateId, stageId: firstStage?.id ?? null },
       include: {
         candidate: { select: { id: true, name: true, email: true } },
@@ -25,6 +28,17 @@ export class ApplicationsService {
         stage: true,
       },
     });
+
+    // Dispara e-mail assíncrono sem bloquear resposta
+    if (application.candidate?.email && job) {
+      this.email.sendApplicationReceived(
+        application.candidate.email,
+        application.candidate.name,
+        job.title,
+      ).catch(() => {});
+    }
+
+    return application;
   }
 
   async findByJob(jobId: string, stageId?: string) {
@@ -74,11 +88,25 @@ export class ApplicationsService {
   }
 
   async moveStage(applicationId: string, stageId: string) {
-    return this.prisma.application.update({
+    const app = await this.prisma.application.update({
       where: { id: applicationId },
       data: { stageId },
-      include: { stage: true },
+      include: {
+        stage: true,
+        candidate: { select: { email: true, name: true } },
+        job: { select: { title: true } },
+      },
     });
+    // Notifica candidato sobre avanço de estágio
+    if (app.candidate?.email && app.stage) {
+      this.email.sendStageAdvanced(
+        app.candidate.email,
+        app.candidate.name,
+        app.job.title,
+        app.stage.name,
+      ).catch(() => {});
+    }
+    return app;
   }
 
   async updateStatus(applicationId: string, status: string) {

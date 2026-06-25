@@ -1,90 +1,81 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import axios from 'axios';
-import { AIProvider, ParsedResume, CandidateRanking } from '../ai.interface';
+import { AIProvider } from '../ai.interface';
 
 @Injectable()
 export class OllamaProvider implements AIProvider {
   private readonly logger = new Logger(OllamaProvider.name);
-  private readonly host: string;
-  private readonly model: string;
+  private baseUrl: string;
+  private model: string;
 
-  constructor(private config: ConfigService) {
-    this.host = config.get('OLLAMA_HOST', 'http://localhost:11434');
-    this.model = config.get('OLLAMA_MODEL', 'qwen3');
+  constructor(config: ConfigService) {
+    this.baseUrl = config.get<string>('OLLAMA_URL', 'http://localhost:11434');
+    this.model = config.get<string>('OLLAMA_MODEL', 'qwen3');
   }
 
-  async generate(prompt: string, systemPrompt?: string): Promise<string> {
-    const messages = [
-      ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
-      { role: 'user', content: prompt },
-    ];
-
-    const { data } = await axios.post(`${this.host}/api/chat`, {
-      model: this.model,
-      messages,
-      stream: false,
+  private async chat(prompt: string): Promise<string> {
+    const res = await fetch(`${this.baseUrl}/api/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: this.model, prompt, stream: false }),
     });
-
-    return data.message.content;
+    if (!res.ok) throw new Error(`Ollama error ${res.status}: ${await res.text()}`);
+    const data = await res.json();
+    return data.response as string;
   }
 
-  async summarize(text: string): Promise<string> {
-    return this.generate(
-      `Resuma o seguinte texto em 3-5 frases objetivas, destacando pontos principais:\n\n${text}`,
-      'Você é um assistente especializado em RH. Seja objetivo e profissional.'
+  generate(prompt: string) { return this.chat(prompt); }
+
+  summarize(text: string) {
+    return this.chat(
+      `Você é um especialista em RH. Resuma o seguinte currículo em 3-5 frases destacando experiências principais, habilidades técnicas e diferenciais. Seja objetivo.\n\nCURRÍCULO:\n${text.slice(0, 4000)}\n\nRESUMO:`
     );
   }
 
-  async parseResume(resumeText: string): Promise<ParsedResume> {
-    const systemPrompt = `Você é um parser de currículos. Extraia as informações e retorne APENAS JSON válido, sem markdown.`;
-    const prompt = `Extraia as informações do currículo abaixo em JSON com os campos:
+  async parseResume(resumeText: string): Promise<Record<string, any>> {
+    const raw = await this.chat(
+      `Extraia informações do currículo abaixo e retorne um JSON válido com os campos:
 {
   "name": string,
   "email": string,
   "phone": string,
+  "location": string,
+  "linkedin": string,
+  "github": string,
   "summary": string,
   "skills": string[],
-  "experience": [{"company": string, "role": string, "startDate": string, "endDate": string, "description": string}],
-  "education": [{"institution": string, "degree": string, "field": string, "year": string}],
   "languages": string[],
+  "experience": [{"company":string, "role":string, "start":string, "end":string, "description":string}],
+  "education": [{"institution":string, "degree":string, "field":string, "year":string}],
   "certifications": string[]
 }
 
-Currículo:
-${resumeText}`;
+Retorne APENAS o JSON, sem texto adicional.
 
-    const raw = await this.generate(prompt, systemPrompt);
+CURRÍCULO:\n${resumeText.slice(0, 5000)}`
+    );
     try {
       const jsonMatch = raw.match(/\{[\s\S]*\}/);
-      return JSON.parse(jsonMatch?.[0] || raw);
+      return jsonMatch ? JSON.parse(jsonMatch[0]) : {};
     } catch {
-      this.logger.warn('Falha ao parsear JSON do currículo, retornando estrutura vazia');
-      return { skills: [], experience: [], education: [], languages: [], certifications: [] };
+      this.logger.warn('parseResume: JSON inválido retornado pela IA');
+      return { raw };
     }
   }
 
-  async rankCandidate(
-    candidateProfile: string,
-    jobDescription: string
-  ): Promise<CandidateRanking> {
-    const systemPrompt = `Você é um especialista em recrutamento. Avalie candidatos e retorne APENAS JSON válido.`;
-    const prompt = `Avalie o candidato para a vaga e retorne JSON:
-{
-  "score": number (0-100),
-  "reasoning": string,
-  "strengths": string[],
-  "gaps": string[]
-}
+  async rankCandidate(profile: string, jobDescription: string): Promise<{ score: number; justification: string }> {
+    const raw = await this.chat(
+      `Você é um recrutador sênior. Avalie o candidato para a vaga e retorne JSON:
+{ "score": <número de 0 a 100>, "justification": "<explicação em 2-3 frases>" }
 
-Vaga:\n${jobDescription}\n\nCandidato:\n${candidateProfile}`;
+RETORNE APENAS O JSON.
 
-    const raw = await this.generate(prompt, systemPrompt);
+VAGA:\n${jobDescription.slice(0, 2000)}\n\nCANDIDATO:\n${profile.slice(0, 2000)}`
+    );
     try {
       const jsonMatch = raw.match(/\{[\s\S]*\}/);
-      return JSON.parse(jsonMatch?.[0] || raw);
-    } catch {
-      return { score: 0, reasoning: 'Erro ao avaliar', strengths: [], gaps: [] };
-    }
+      if (jsonMatch) return JSON.parse(jsonMatch[0]);
+    } catch { /* fallback */ }
+    return { score: 0, justification: 'Não foi possível calcular score automaticamente.' };
   }
 }

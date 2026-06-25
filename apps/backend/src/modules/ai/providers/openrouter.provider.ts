@@ -1,69 +1,64 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import axios from 'axios';
-import { AIProvider, ParsedResume, CandidateRanking } from '../ai.interface';
-import { OllamaProvider } from './ollama.provider';
+import { AIProvider } from '../ai.interface';
 
-/**
- * OpenRouter — acesso a modelos gratuitos remotamente.
- * Modelos gratuitos disponíveis em: https://openrouter.ai/models?q=free
- * Ex: meta-llama/llama-3-8b-instruct:free, mistralai/mistral-7b-instruct:free
- */
 @Injectable()
 export class OpenRouterProvider implements AIProvider {
-  private readonly apiKey: string;
-  private readonly model: string;
-  private readonly baseURL = 'https://openrouter.ai/api/v1';
+  private readonly logger = new Logger(OpenRouterProvider.name);
+  private apiKey: string;
+  private model: string;
 
-  constructor(private config: ConfigService) {
-    this.apiKey = config.get('OPENROUTER_API_KEY', '');
-    this.model = config.get(
-      'OPENROUTER_MODEL',
-      'meta-llama/llama-3-8b-instruct:free'
+  constructor(config: ConfigService) {
+    this.apiKey = config.get<string>('OPENROUTER_API_KEY', '');
+    this.model = config.get<string>('OPENROUTER_MODEL', 'meta-llama/llama-3-8b-instruct:free');
+  }
+
+  private async chat(userMessage: string): Promise<string> {
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json',
+        'X-Title': 'ATS Open Source',
+      },
+      body: JSON.stringify({
+        model: this.model,
+        messages: [{ role: 'user', content: userMessage }],
+      }),
+    });
+    if (!res.ok) throw new Error(`OpenRouter error ${res.status}: ${await res.text()}`);
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content ?? '';
+  }
+
+  generate(prompt: string) { return this.chat(prompt); }
+
+  summarize(text: string) {
+    return this.chat(
+      `Resuma o currículo em 3-5 frases destacando experiências, habilidades e diferenciais. Seja objetivo.\n\nCURRÍCULO:\n${text.slice(0, 4000)}\n\nRESUMO:`
     );
   }
 
-  private async chat(messages: { role: string; content: string }[]): Promise<string> {
-    const { data } = await axios.post(
-      `${this.baseURL}/chat/completions`,
-      { model: this.model, messages },
-      {
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          'HTTP-Referer': 'https://github.com/juliacintral/ats-opensource',
-          'X-Title': 'ATS Enterprise',
-        },
-      }
+  async parseResume(resumeText: string): Promise<Record<string, any>> {
+    const raw = await this.chat(
+      `Extraia do currículo e retorne APENAS JSON válido com: name, email, phone, location, linkedin, github, summary, skills[], languages[], experience[], education[], certifications[].\n\nCURRÍCULO:\n${resumeText.slice(0, 5000)}`
     );
-    return data.choices[0].message.content;
+    try {
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      return jsonMatch ? JSON.parse(jsonMatch[0]) : {};
+    } catch {
+      return { raw };
+    }
   }
 
-  async generate(prompt: string, systemPrompt?: string): Promise<string> {
-    const messages = [
-      ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
-      { role: 'user', content: prompt },
-    ];
-    return this.chat(messages);
-  }
-
-  // Reutiliza a lógica de prompt do OllamaProvider via herança de responsabilidade
-  async summarize(text: string): Promise<string> {
-    return this.generate(
-      `Resuma em 3-5 frases objetivas:\n\n${text}`,
-      'Você é um assistente de RH. Seja objetivo.'
+  async rankCandidate(profile: string, jobDescription: string): Promise<{ score: number; justification: string }> {
+    const raw = await this.chat(
+      `Avalie o candidato para a vaga. Retorne APENAS JSON: { "score": <0-100>, "justification": "<2-3 frases>" }\n\nVAGA:\n${jobDescription.slice(0, 2000)}\n\nCANDIDATO:\n${profile.slice(0, 2000)}`
     );
-  }
-
-  async parseResume(resumeText: string): Promise<ParsedResume> {
-    // Mesma lógica do Ollama — o prompt é idêntico
-    const ollamaLike = new OllamaProvider(this.config);
-    ollamaLike['generate'] = this.generate.bind(this);
-    return ollamaLike.parseResume(resumeText);
-  }
-
-  async rankCandidate(candidateProfile: string, jobDescription: string): Promise<CandidateRanking> {
-    const ollamaLike = new OllamaProvider(this.config);
-    ollamaLike['generate'] = this.generate.bind(this);
-    return ollamaLike.rankCandidate(candidateProfile, jobDescription);
+    try {
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      if (jsonMatch) return JSON.parse(jsonMatch[0]);
+    } catch { /* fallback */ }
+    return { score: 0, justification: 'Score indisponível.' };
   }
 }

@@ -1,29 +1,35 @@
-import { Inject, Injectable } from '@nestjs/common';
-import { AIProvider, ParsedResume, CandidateRanking } from './ai.interface';
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { AIProvider } from './ai.interface';
+import { OllamaProvider } from './providers/ollama.provider';
+import { OpenRouterProvider } from './providers/openrouter.provider';
 
+/**
+ * AIService — fachada única para IA.
+ * Troca de provedor via variável de ambiente AI_PROVIDER:
+ *   ollama       → Ollama local (padrão)
+ *   openrouter   → OpenRouter free tier
+ */
 @Injectable()
-export class AIService {
-  constructor(@Inject('AI_PROVIDER') private readonly ai: AIProvider) {}
+export class AIService implements AIProvider {
+  private readonly logger = new Logger(AIService.name);
+  private provider: AIProvider;
 
-  async parseResume(text: string): Promise<ParsedResume> {
-    return this.ai.parseResume(text);
+  constructor(
+    config: ConfigService,
+    ollama: OllamaProvider,
+    openrouter: OpenRouterProvider,
+  ) {
+    const selected = config.get<string>('AI_PROVIDER', 'ollama');
+    this.provider = selected === 'openrouter' ? openrouter : ollama;
+    this.logger.log(`Provedor de IA: ${selected}`);
   }
 
-  async summarizeCandidate(profileText: string): Promise<string> {
-    return this.ai.summarize(profileText);
-  }
+  generate(prompt: string) { return this.provider.generate(prompt); }
+  summarize(text: string) { return this.provider.summarize(text); }
+  parseResume(resumeText: string) { return this.provider.parseResume(resumeText); }
+  rankCandidate(profile: string, jobDesc: string) { return this.provider.rankCandidate(profile, jobDesc); }
 
-  async rankCandidate(
-    candidateProfile: string,
-    jobDescription: string
-  ): Promise<CandidateRanking> {
-    return this.ai.rankCandidate(candidateProfile, jobDescription);
-  }
-
-  async generateJobDescription(title: string, requirements: string): Promise<string> {
-    return this.ai.generate(
-      `Crie uma descrição de vaga completa e atrativa para: ${title}\nRequisitos: ${requirements}`,
-      'Você é um especialista em recrutamento. Crie descrições de vagas claras, inclusivas e atrativas.'
-    );
-  }
+  /** Atalho semântico usado por CandidatesService */
+  summarizeCandidate(resumeText: string) { return this.provider.summarize(resumeText); }
 }

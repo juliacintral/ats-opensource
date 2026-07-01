@@ -1,0 +1,100 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id         String      @id @default(cuid())
+  email      String      @unique
+  name       String
+  password   String
+  role       Role        @default(RECRUITER)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  jobs       Job[]
+  interviews Interview[]
+  feedbacks  Feedback[]
+}
+
+model Job {
+  id           String        @id @default(cuid())
+  title        String
+  department   String?
+  location     String?
+  description  String?
+  status       JobStatus     @default(OPEN)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  createdBy    User          @relation(fields: [createdById], references: [id])
+  createdById  String
+  stages       Stage[]
+  applications Application[]
+}
+
+model Stage {
+  id           String        @id @default(cuid())
+  name         String
+  order        Int
+  job          Job           @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  jobId        String
+  applications Application[]
+}
+
+model Candidate {
+  id           String        @id @default(cuid())
+  name         String
+  email        String        @unique
+  phone        String?
+  resumeUrl    String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  applications Application[]
+}
+
+model Application {
+  id          String      @id @default(cuid())
+  candidate   Candidate   @relation(fields: [candidateId], references: [id])
+  candidateId String
+  job         Job         @relation(fields: [jobId], references: [id])
+  jobId       String
+  stage       Stage       @relation(fields: [stageId], references: [id])
+  stageId     String
+  status      AppStatus   @default(ACTIVE)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  interviews  Interview[]
+  feedbacks   Feedback[]
+  @@unique([candidateId, jobId])
+}
+
+model Interview {
+  id            String      @id @default(cuid())
+  application   Application @relation(fields: [applicationId], references: [id])
+  applicationId String
+  interviewer   User        @relation(fields: [interviewerId], references: [id])
+  interviewerId String
+  scheduledAt   DateTime
+  type          String      @default("video")
+  notes         String?
+  createdAt     DateTime    @default(now())
+}
+
+model Feedback {
+  id            String      @id @default(cuid())
+  application   Application @relation(fields: [applicationId], references: [id])
+  applicationId String
+  author        User        @relation(fields: [authorId], references: [id])
+  authorId      String
+  rating        Int
+  comment       String?
+  createdAt     DateTime    @default(now())
+}
+
+enum Role { ADMIN RECRUITER HIRING_MANAGER }
+enum JobStatus { OPEN CLOSED DRAFT }
+enum AppStatus { ACTIVE REJECTED HIRED WITHDRAWN }

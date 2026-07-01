@@ -1,21 +1,16 @@
-'use client';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
-import { useEffect, useState } from 'react';
-import { useAuthStore } from '@/store/auth.store';
+'use client'
+
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { useState } from 'react'
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  const [client] = useState(() => new QueryClient({
-    defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
-  }));
-  const hydrate = useAuthStore((s) => s.hydrate);
-
-  useEffect(() => { hydrate(); }, [hydrate]);
+  const [queryClient] = useState(() => new QueryClient({
+    defaultOptions: { queries: { retry: 1, staleTime: 30_000 } }
+  }))
 
   return (
-    <QueryClientProvider client={client}>
+    <QueryClientProvider client={queryClient}>
       {children}
-      <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>
-  );
+  )
 }

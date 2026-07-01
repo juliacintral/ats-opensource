@@ -1,322 +1,264 @@
-# ATS Open Source
+# 🎯 ATS Open Source
 
-> Applicant Tracking System enterprise, self-hosted, 100% open source.
-> Stack: Next.js · NestJS · PostgreSQL · Prisma · Redis · Ollama (IA local)
-
-[![CI](https://github.com/juliacintral/ats-opensource/actions/workflows/ci.yml/badge.svg)](https://github.com/juliacintral/ats-opensource/actions/workflows/ci.yml)
-[![E2E](https://github.com/juliacintral/ats-opensource/actions/workflows/e2e.yml/badge.svg)](https://github.com/juliacintral/ats-opensource/actions/workflows/e2e.yml)
-
-## Funcionalidades
-
-- 📋 Pipeline de vagas com kanban drag-and-drop
-- 🤖 Parsing de currículo com IA local (Ollama · Qwen3 · Llama3)
-- 🎯 Score de aderência candidato × vaga
-- 💬 Feedbacks estruturados com estrelas
-- 📅 Agendamento de entrevistas com link Google Meet / Teams
-- 🔐 Auth própria: JWT + Refresh Token + Bcrypt
-- 📊 Dashboard e relatórios
-- 🔍 Busca full-text nativa no PostgreSQL
+Sistema de Recrutamento (ATS) open source inspirado no Greenhouse. Construído com Next.js, NestJS, PostgreSQL e IA local via Ollama.
 
 ---
 
-## Início rápido (local)
+## 🚀 Guia Completo — Do Zero ao Funcionando
 
-### Pré-requisitos
+> Siga os passos na ordem. Cada passo tem um link direto para onde você precisa ir.
 
-- Node 20+
-- Docker & Docker Compose
-- [Ollama](https://ollama.com) instalado localmente
+---
+
+## Passo 1 — Instalar o Node.js
+
+Você precisa do Node.js instalado no computador.
+
+1. Acesse 👉 **https://nodejs.org**
+2. Clique no botão verde **"LTS"** (versão recomendada)
+3. Baixe e instale normalmente (next, next, finish)
+4. Para confirmar que funcionou, abra o terminal e digite:
+   ```
+   node -v
+   ```
+   Deve aparecer algo como `v20.x.x`
+
+> **Onde abrir o terminal?**
+> - Windows: aperta `Win + R`, digita `cmd`, aperta Enter
+> - Mac: aperta `Cmd + Espaço`, digita `Terminal`, aperta Enter
+
+---
+
+## Passo 2 — Instalar o Git
+
+1. Acesse 👉 **https://git-scm.com/downloads**
+2. Baixe para o seu sistema operacional
+3. Instale com as opções padrão
+4. Para confirmar:
+   ```
+   git -v
+   ```
+
+---
+
+## Passo 3 — Baixar o projeto
+
+No terminal, escolha uma pasta onde quer salvar o projeto (ex: Documentos) e rode:
 
 ```bash
-# 1. Clone
 git clone https://github.com/juliacintral/ats-opensource
 cd ats-opensource
-npm install
+```
 
-# 2. Suba PostgreSQL + Redis + MinIO
-docker compose -f docker/docker-compose.yml up -d
+Agora você tem o projeto na sua máquina.
 
-# 3. Variáveis de ambiente
-cp apps/backend/.env.example apps/backend/.env
-cp apps/frontend/.env.example apps/frontend/.env.local
-# edite os arquivos conforme necessário
+---
 
-# 4. Migrate + seed
+## Passo 4 — Criar o banco de dados (gratuito, online)
+
+Você vai usar o **Neon** — banco PostgreSQL gratuito na nuvem, sem instalar nada.
+
+1. Acesse 👉 **https://neon.tech**
+2. Clique em **"Sign up"** e crie uma conta (pode usar o Google)
+3. Clique em **"Create a project"**
+4. Dê um nome (ex: `ats-db`) e clique em **Create**
+5. Na próxima tela, você vai ver uma **Connection String** assim:
+   ```
+   postgresql://usuario:senha@ep-xxx.us-east-2.aws.neon.tech/neondb
+   ```
+6. **Copie essa string** — você vai usar no próximo passo
+
+---
+
+## Passo 5 — Configurar o backend
+
+No terminal:
+
+```bash
 cd apps/backend
-npx prisma migrate dev
-npx ts-node prisma/seed.ts
-cd ../..
+```
 
-# 5. Baixe o modelo de IA
-ollama pull qwen3
+Agora crie o arquivo de configuração:
 
-# 6. Rode tudo
+**Windows:**
+```bash
+copy .env.example .env
+```
+
+**Mac/Linux:**
+```bash
+cp .env.example .env
+```
+
+Abra o arquivo `.env` no bloco de notas (ou qualquer editor) e substitua:
+
+```env
+DATABASE_URL="cole-aqui-a-connection-string-do-neon"
+DIRECT_URL="cole-aqui-a-mesma-connection-string-do-neon"
+
+JWT_SECRET="qualquer-texto-longo-aqui-ex-minha-chave-super-secreta-123"
+REFRESH_TOKEN_SECRET="outro-texto-longo-diferente-aqui-456"
+
+PORT=3001
+NODE_ENV=development
+FRONTEND_URL=http://localhost:3000
+```
+
+Salve o arquivo.
+
+---
+
+## Passo 6 — Instalar as dependências e criar as tabelas
+
+Ainda na pasta `apps/backend`, rode um comando de cada vez:
+
+```bash
+npm install
+```
+_(aguarde terminar — pode demorar 1-2 minutos)_
+
+```bash
+npx prisma migrate dev --name init
+```
+_(isso cria todas as tabelas no banco que você criou no Neon)_
+
+```bash
+npx prisma db seed
+```
+_(isso cria usuários e uma vaga de exemplo para você testar)_
+
+---
+
+## Passo 7 — Rodar o backend
+
+```bash
+npm run start:dev
+```
+
+Você deve ver no terminal:
+```
+Backend rodando na porta 3001
+```
+
+✅ **Backend funcionando!** Deixe esse terminal aberto.
+
+---
+
+## Passo 8 — Configurar e rodar o frontend
+
+Abra um **novo terminal** (sem fechar o anterior) e navegue até a pasta do frontend:
+
+```bash
+cd apps/frontend
+```
+
+Crie o arquivo de configuração:
+
+**Windows:**
+```bash
+copy .env.example .env.local
+```
+
+**Mac/Linux:**
+```bash
+cp .env.example .env.local
+```
+
+O conteúdo já está correto (aponta para `localhost:3001`). Não precisa mudar nada.
+
+Agora instale e rode:
+
+```bash
+npm install
 npm run dev
-# Frontend: http://localhost:3000
-# Backend:  http://localhost:3001/api
-# Swagger:  http://localhost:3001/docs
 ```
 
-**Credenciais do seed:**
-| E-mail | Senha | Role |
-|---|---|---|
-| admin@ats.local | Admin@12345 | ADMIN |
-| recruiter@ats.local | Recruiter@12345 | RECRUITER |
+Você deve ver:
+```
+▲ Next.js 14.x.x
+- Local: http://localhost:3000
+```
+
+✅ **Frontend funcionando!**
 
 ---
 
-## Deploy gratuito para produção
+## Passo 9 — Acessar o sistema
 
-> Nenhuma linha abaixo exige cartão de crédito.
+Abra o navegador e acesse 👉 **http://localhost:3000**
 
-### Opção A — Render + Supabase + Cloudflare Pages ⭐ Recomendada
-
-| Serviço | O que roda | Free tier |
-|---|---|---|
-| [Cloudflare Pages](https://pages.cloudflare.com) | Frontend Next.js | Ilimitado de requests, 500 builds/mês |
-| [Render](https://render.com) | Backend NestJS (Web Service) | 750 h/mês — dorme após inatividade |
-| [Supabase](https://supabase.com) | PostgreSQL + Storage (currículo) | 500 MB DB, 1 GB storage |
-| [Upstash](https://upstash.com) | Redis (JWT blacklist) | 10 k req/dia grátis |
-| [Brevo](https://brevo.com) | SMTP e-mail | 300 e-mails/dia grátis |
-
-#### 1. PostgreSQL — Supabase
-
-```bash
-# 1. Crie um projeto em https://app.supabase.com
-# 2. Copie a Connection String (modo "URI") em Settings → Database
-# Exemplo:
-DATABASE_URL=postgresql://postgres:[senha]@db.[ref].supabase.co:5432/postgres
-```
-
-#### 2. Redis — Upstash
-
-```bash
-# 1. Crie um database em https://console.upstash.com
-# 2. Copie o REDIS_URL (TLS)
-REDIS_URL=rediss://default:[token]@[host].upstash.io:6380
-```
-
-#### 3. Backend — Render
-
-1. Acesse [render.com](https://render.com) → **New Web Service** → conecte este repositório
-2. Configurações:
-   ```
-   Root Directory: apps/backend
-   Build Command:  npm ci && npx prisma generate && npm run build
-   Start Command:  node dist/main
-   Node Version:   20
-   ```
-3. Em **Environment Variables**, adicione:
-   ```
-   DATABASE_URL=<supabase url>
-   REDIS_URL=<upstash url>
-   JWT_SECRET=<gere com: openssl rand -hex 32>
-   REFRESH_TOKEN_SECRET=<gere com: openssl rand -hex 32>
-   JWT_EXPIRES_IN=1h
-   REFRESH_TOKEN_EXPIRES_IN=7d
-   AI_PROVIDER=ollama
-   OLLAMA_URL=https://seu-ollama.dominio.com   # ver seção IA abaixo
-   FRONTEND_URL=https://seu-app.pages.dev
-   MAIL_HOST=smtp-relay.brevo.com
-   MAIL_PORT=587
-   MAIL_USER=<brevo login>
-   MAIL_PASS=<brevo smtp key>
-   MAIL_FROM=noreply@seudominio.com
-   STORAGE_PROVIDER=supabase
-   SUPABASE_URL=<supabase url>
-   SUPABASE_KEY=<supabase service role key>
-   ```
-4. Clique em **Create Web Service**. O Render fará o deploy automaticamente a cada push.
-
-> ⚠️ No free tier o serviço **dorme após 15 min de inatividade** e leva ~30s para acordar.
-> Para evitar isso: use o [UptimeRobot](https://uptimerobot.com) (gratuito) para fazer ping a cada 5 min em `https://seu-backend.onrender.com/api/health`.
-
-#### 4. Frontend — Cloudflare Pages
-
-```bash
-# Opção CLI
-npm install -g wrangler
-wrangler pages project create ats-opensource
-
-# Build
-cd apps/frontend
-npm run build   # gera .next/
-```
-
-Ou pelo dashboard:
-1. [dash.cloudflare.com](https://dash.cloudflare.com) → **Workers & Pages** → **Create** → **Pages** → conecte GitHub
-2. Configurações:
-   ```
-   Framework preset:  Next.js
-   Root directory:    apps/frontend
-   Build command:     npm run build
-   Build output dir:  .next
-   ```
-3. Variáveis de ambiente:
-   ```
-   NEXT_PUBLIC_API_URL=https://seu-backend.onrender.com/api
-   ```
-4. Clique em **Save and Deploy**.
+Faça login com:
+- **Email:** `admin@ats.com`
+- **Senha:** `admin123`
 
 ---
 
-### Opção B — Railway (plano Hobby free)
+## ✅ Resumo dos comandos
 
-Railway oferece **$5 de crédito mensal grátis** sem cartão.
-
+### Terminal 1 — Backend
 ```bash
-npm install -g @railway/cli
-railway login
-railway init
-railway add postgresql   # provisiona Postgres automaticamente
-railway add redis
-railway up               # deploy backend
-```
-
-> Frontend: use Cloudflare Pages conforme Opção A.
-
----
-
-### Opção C — VPS própria (Oracle Cloud Free Tier)
-
-Oracle oferece **2 VMs ARM gratuitas para sempre** (4 OCPUs + 24 GB RAM cada).
-
-```bash
-# Na VM:
 git clone https://github.com/juliacintral/ats-opensource
-cd ats-opensource
-
-# Configure .env de produção
-cp apps/backend/.env.example apps/backend/.env
-vim apps/backend/.env
-
-# Suba tudo com Docker Compose
-docker compose -f docker/docker-compose.prod.yml up -d
-
-# Ollama na mesma VM
-curl -fsSL https://ollama.com/install.sh | sh
-ollama pull qwen3
-
-# Nginx como reverse proxy + HTTPS com Certbot
-sudo apt install nginx certbot python3-certbot-nginx -y
-sudo certbot --nginx -d seudominio.com
+cd ats-opensource/apps/backend
+cp .env.example .env          # edite com sua DATABASE_URL do Neon
+npm install
+npx prisma migrate dev --name init
+npx prisma db seed
+npm run start:dev
 ```
 
----
-
-## IA local em produção
-
-Para usar Ollama em servidor próprio (VPS ou Oracle Cloud):
-
+### Terminal 2 — Frontend
 ```bash
-# Instale Ollama na VPS
-curl -fsSL https://ollama.com/install.sh | sh
-ollama serve &
-ollama pull qwen3
-
-# Exponha com autenticação básica via nginx
-location /ollama/ {
-    proxy_pass http://127.0.0.1:11434/;
-    auth_basic "Restricted";
-    auth_basic_user_file /etc/nginx/.htpasswd;
-}
+cd ats-opensource/apps/frontend
+cp .env.example .env.local
+npm install
+npm run dev
 ```
 
-Alternativas 100% gratuitas se não tiver VPS:
+---
 
-| Provedor | Free tier | Configuração |
+## 🆘 Problemas comuns
+
+### "command not found: npm"
+Node.js não foi instalado corretamente. Reinstale pelo link do Passo 1.
+
+### "Error: Can't reach database server"
+A `DATABASE_URL` no arquivo `.env` está errada. Volte ao Neon, copie a connection string novamente e cole no `.env`.
+
+### "Port 3001 already in use"
+Algum outro processo está usando a porta. Troque `PORT=3001` para `PORT=3002` no `.env` e mude `NEXT_PUBLIC_API_URL=http://localhost:3002/api` no `.env.local`.
+
+### A página abre mas dá erro ao fazer login
+Verifique se o Terminal 1 (backend) ainda está rodando. Se tiver fechado, abra novamente e rode `npm run start:dev`.
+
+---
+
+## 📦 Stack utilizada
+
+| Camada | Tecnologia | Custo |
 |---|---|---|
-| [OpenRouter](https://openrouter.ai) | Modelos free (Llama3, Qwen3, Gemma) | `AI_PROVIDER=openrouter`, `OPENROUTER_API_KEY=sk-...` |
-| [Groq](https://groq.com) | 14 k req/dia, Llama3 ultra-rápido | `AI_PROVIDER=openrouter`, aponte para api.groq.com |
-| [Google AI Studio](https://aistudio.google.com) | Gemini Flash gratuito | Adicione provider `GeminiProvider` seguindo a interface `AIProvider` |
+| Frontend | Next.js 14 + React + Tailwind | Gratuito |
+| Backend | NestJS + TypeScript | Gratuito |
+| Banco de dados | PostgreSQL via Neon | Gratuito |
+| ORM | Prisma | Gratuito |
+| Autenticação | JWT próprio (sem Auth0) | Gratuito |
+| IA (futuro) | Ollama + Qwen3/Llama3 | Gratuito |
 
 ---
 
-## Testes E2E
+## 🌐 Deploy (quando quiser colocar online)
 
-```bash
-# Instale browsers
-cd apps/frontend
-npx playwright install chromium
+### Frontend → Vercel (gratuito)
+1. Acesse 👉 **https://vercel.com**
+2. Conecte com sua conta do GitHub
+3. Importe o repositório `ats-opensource`
+4. Configure o **Root Directory** como `apps/frontend`
+5. Adicione a variável de ambiente: `NEXT_PUBLIC_API_URL` = URL do seu backend
+6. Clique em Deploy
 
-# Configure seed
-cp e2e/.env.test.example e2e/.env.test
-
-# Rode (backend + frontend devem estar rodando)
-npx playwright test
-
-# Com UI interativa
-npx playwright test --ui
-
-# Relatório HTML
-npx playwright show-report
-```
-
-Suítes cobertas:
-- ✅ `auth.spec.ts` — login, redirect, validação de campos
-- ✅ `jobs.spec.ts` — listagem, criação, filtro, busca, kanban
-- ✅ `candidates.spec.ts` — listagem, criação, busca, detalhe
-- ✅ `interviews.spec.ts` — listagem, validação de formulário
-
----
-
-## Estrutura do projeto
-
-```
-ats-opensource/
-├── apps/
-│   ├── frontend/          # Next.js 14 + TypeScript + Tailwind
-│   │   └── e2e/           # Playwright E2E tests
-│   └── backend/           # NestJS + Prisma + PostgreSQL
-│       └── prisma/        # Schema + migrations + seed
-├── docker/
-│   ├── docker-compose.yml       # Dev: PG + Redis + MinIO + Ollama
-│   └── docker-compose.prod.yml  # Prod: + Nginx
-├── .github/
-│   └── workflows/
-│       ├── ci.yml    # lint + build
-│       └── e2e.yml   # Playwright no GitHub Actions
-└── packages/shared/   # Tipos TypeScript compartilhados
-```
-
----
-
-## Variáveis de ambiente resumidas
-
-### Backend (`apps/backend/.env`)
-
-| Variável | Exemplo | Obrigatória |
-|---|---|---|
-| `DATABASE_URL` | `postgresql://...` | ✅ |
-| `JWT_SECRET` | `openssl rand -hex 32` | ✅ |
-| `REFRESH_TOKEN_SECRET` | `openssl rand -hex 32` | ✅ |
-| `REDIS_URL` | `redis://localhost:6379` | ✅ |
-| `AI_PROVIDER` | `ollama` ou `openrouter` | ✅ |
-| `OLLAMA_URL` | `http://localhost:11434` | Se ollama |
-| `OLLAMA_MODEL` | `qwen3` | Se ollama |
-| `OPENROUTER_API_KEY` | `sk-or-...` | Se openrouter |
-| `STORAGE_PROVIDER` | `supabase` ou `minio` | ✅ |
-| `SUPABASE_URL` | `https://xxx.supabase.co` | Se supabase |
-| `SUPABASE_KEY` | service role key | Se supabase |
-| `MAIL_HOST` | `smtp-relay.brevo.com` | ✅ |
-| `FRONTEND_URL` | `https://seu-app.pages.dev` | ✅ |
-
-### Frontend (`apps/frontend/.env.local`)
-
-| Variável | Exemplo |
-|---|---|
-| `NEXT_PUBLIC_API_URL` | `https://seu-backend.onrender.com/api` |
-
----
-
-## Contribuindo
-
-1. Fork este repositório
-2. Crie uma branch: `git checkout -b feat/minha-feature`
-3. Commit: `git commit -m 'feat: minha feature'`
-4. Push: `git push origin feat/minha-feature`
-5. Abra um Pull Request
-
-## Licença
-
-MIT — use à vontade, inclusive para fins comerciais.
+### Backend → Railway (gratuito nos primeiros meses)
+1. Acesse 👉 **https://railway.app**
+2. Conecte com GitHub
+3. New Project → Deploy from GitHub repo
+4. Selecione `ats-opensource`, configure Root Directory como `apps/backend`
+5. Adicione as variáveis de ambiente do arquivo `.env`
+6. Deploy

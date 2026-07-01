@@ -6,49 +6,41 @@ import { EmailService } from '../email/email.service';
 export class ApplicationsService {
   constructor(
     private prisma: PrismaService,
-    private email: EmailService,
+    private emailService: EmailService,
   ) {}
 
   async apply(jobId: string, candidateId: string) {
-    const exists = await this.prisma.application.findUnique({
+    const existing = await this.prisma.application.findUnique({
       where: { jobId_candidateId: { jobId, candidateId } },
     });
-    if (exists) throw new ConflictException('Candidato já aplicou para esta vaga');
+    if (existing) throw new ConflictException('Candidato já aplicou para esta vaga');
 
-    const [job, firstStage] = await Promise.all([
-      this.prisma.job.findUnique({ where: { id: jobId } }),
-      this.prisma.stage.findFirst({ where: { jobId }, orderBy: { order: 'asc' } }),
-    ]);
-
-    const application = await this.prisma.application.create({
-      data: { jobId, candidateId, stageId: firstStage?.id ?? null },
-      include: {
-        candidate: { select: { id: true, name: true, email: true } },
-        job: { select: { id: true, title: true } },
-        stage: true,
-      },
+    const firstStage = await this.prisma.stage.findFirst({
+      where: { jobId },
+      orderBy: { order: 'asc' },
     });
 
-    // Dispara e-mail assíncrono sem bloquear resposta
-    if (application.candidate?.email && job) {
-      this.email.sendApplicationReceived(
+    const application = await this.prisma.application.create({
+      data: { jobId, candidateId, currentStageId: firstStage?.id ?? null },
+      include: { candidate: true, job: true },
+    });
+
+    if (application.candidate?.email && application.job) {
+      await this.emailService.sendApplicationConfirmation(
         application.candidate.email,
         application.candidate.name,
-        job.title,
-      ).catch(() => {});
+        application.job.title,
+      );
     }
-
     return application;
   }
 
-  async findByJob(jobId: string, stageId?: string) {
+  async findByJob(jobId: string) {
     return this.prisma.application.findMany({
-      where: { jobId, ...(stageId ? { stageId } : {}) },
+      where: { jobId },
       include: {
         candidate: true,
-        stage: true,
-        feedbacks: { include: { author: { select: { id: true, name: true } } } },
-        _count: { select: { interviews: true, feedbacks: true } },
+        currentStage: true,
       },
       orderBy: [{ aiScore: 'desc' }, { appliedAt: 'asc' }],
     });
@@ -58,68 +50,56 @@ export class ApplicationsService {
     return this.prisma.application.findMany({
       where: { candidateId },
       include: {
-        job: { select: { id: true, title: true, status: true } },
-        stage: true,
-        _count: { select: { interviews: true } },
+        job: { include: { pipeline: { orderBy: { order: 'asc' } } } },
+        currentStage: true,
       },
       orderBy: { appliedAt: 'desc' },
     });
   }
 
-  async findOne(id: string) {
-    const app = await this.prisma.application.findUnique({
-      where: { id },
+  async getKanban(jobId: string) {
+    const job = await this.prisma.job.findUnique({
+      where: { id: jobId },
       include: {
-        candidate: true,
-        job: { include: { pipeline: { orderBy: { order: 'asc' } } } },
-        stage: true,
-        interviews: {
-          include: { interviewer: { select: { id: true, name: true } } },
-          orderBy: { scheduledAt: 'asc' },
-        },
-        feedbacks: {
-          include: { author: { select: { id: true, name: true } } },
-          orderBy: { createdAt: 'desc' },
+        pipeline: { orderBy: { order: 'asc' } },
+        applications: {
+          include: { candidate: true, currentStage: true },
         },
       },
     });
-    if (!app) throw new NotFoundException('Candidatura não encontrada');
-    return app;
+    if (!job) throw new NotFoundException('Vaga não encontrada');
+    return job;
   }
 
   async moveStage(applicationId: string, stageId: string) {
     const app = await this.prisma.application.update({
       where: { id: applicationId },
-      data: { stageId },
-      include: {
-        stage: true,
-        candidate: { select: { email: true, name: true } },
-        job: { select: { title: true } },
-      },
+      data: { currentStageId: stageId },
+      include: { candidate: true, job: true, currentStage: true },
     });
-    // Notifica candidato sobre avanço de estágio
-    if (app.candidate?.email && app.stage) {
-      this.email.sendStageAdvanced(
+
+    if (app.candidate?.email && app.currentStage) {
+      await this.emailService.sendStageUpdate(
         app.candidate.email,
         app.candidate.name,
         app.job.title,
-        app.stage.name,
-      ).catch(() => {});
+        app.currentStage.name,
+      );
     }
     return app;
+  }
+
+  async updateNotes(applicationId: string, notes: string) {
+    return this.prisma.application.update({
+      where: { id: applicationId },
+      data: { notes },
+    });
   }
 
   async updateStatus(applicationId: string, status: string) {
     return this.prisma.application.update({
       where: { id: applicationId },
       data: { status: status as any },
-    });
-  }
-
-  async addNote(applicationId: string, notes: string) {
-    return this.prisma.application.update({
-      where: { id: applicationId },
-      data: { notes },
     });
   }
 }

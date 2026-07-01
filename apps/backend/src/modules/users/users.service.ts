@@ -1,45 +1,30 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { UpdateUserDto } from './dto/update-user.dto';
-import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class UsersService {
   constructor(private prisma: PrismaService) {}
 
-  findById(id: string) {
-    return this.prisma.user.findUnique({
+  async findOne(id: string) {
+    const user = await this.prisma.user.findUnique({
       where: { id },
       select: { id: true, name: true, email: true, role: true, avatarUrl: true, isActive: true, createdAt: true },
     });
+    if (!user) throw new NotFoundException('Usuário não encontrado');
+    return user;
   }
 
-  findByEmail(email: string) {
-    return this.prisma.user.findUnique({ where: { email } });
-  }
-
-  async list() {
+  async findAll() {
     return this.prisma.user.findMany({
       select: { id: true, name: true, email: true, role: true, isActive: true, createdAt: true },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { name: 'asc' },
     });
   }
 
-  async update(id: string, dto: UpdateUserDto) {
-    const user = await this.prisma.user.findUnique({ where: { id } });
-    if (!user) throw new NotFoundException('Usuário não encontrado');
-    if (dto.email && dto.email !== user.email) {
-      const exists = await this.prisma.user.findUnique({ where: { email: dto.email } });
-      if (exists) throw new ConflictException('E-mail já em uso');
-    }
-    const data: any = { ...dto };
-    if (dto.password) {
-      data.passwordHash = await bcrypt.hash(dto.password, 12);
-      delete data.password;
-    }
+  async update(id: string, dto: any) {
     return this.prisma.user.update({
       where: { id },
-      data,
+      data: dto,
       select: { id: true, name: true, email: true, role: true, avatarUrl: true, isActive: true },
     });
   }

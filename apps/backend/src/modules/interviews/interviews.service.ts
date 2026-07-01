@@ -8,36 +8,35 @@ import { CreateFeedbackDto } from './dto/create-feedback.dto';
 export class InterviewsService {
   constructor(
     private prisma: PrismaService,
-    private email: EmailService,
+    private emailService: EmailService,
   ) {}
 
   async schedule(dto: CreateInterviewDto, interviewerId: string) {
     const interview = await this.prisma.interview.create({
-      data: { ...dto, interviewerId, scheduledAt: new Date(dto.scheduledAt) },
+      data: {
+        applicationId: dto.applicationId,
+        interviewerId,
+        scheduledAt: new Date(dto.scheduledAt),
+        duration: dto.duration ?? 60,
+        type: dto.type ?? 'VIDEO',
+        meetingUrl: dto.meetingUrl,
+        notes: dto.notes,
+      },
       include: {
+        application: { include: { job: { select: { id: true, title: true } }, candidate: { select: { id: true, email: true, name: true } } } },
         interviewer: { select: { id: true, name: true, email: true } },
-        application: {
-          include: {
-            candidate: { select: { id: true, name: true, email: true } },
-            job: { select: { id: true, title: true } },
-          },
-        },
       },
     });
 
-    // Notifica candidato por e-mail
-    const candidate = interview.application?.candidate;
-    const job = interview.application?.job;
-    if (candidate?.email && job) {
-      this.email.sendInterviewScheduled(
-        candidate.email,
-        candidate.name,
-        job.title,
+    if (interview.application.candidate?.email) {
+      await this.emailService.sendInterviewInvite(
+        interview.application.candidate.email,
+        interview.application.candidate.name,
+        interview.application.job.title,
         interview.scheduledAt,
         interview.meetingUrl ?? undefined,
-      ).catch(() => {});
+      );
     }
-
     return interview;
   }
 
@@ -46,50 +45,32 @@ export class InterviewsService {
       where: { applicationId },
       include: {
         interviewer: { select: { id: true, name: true } },
-        feedback: true,
+        feedbacks: { select: { id: true } },
       },
       orderBy: { scheduledAt: 'asc' },
     });
   }
 
-  async findByInterviewer(interviewerId: string) {
-    const now = new Date();
-    return this.prisma.interview.findMany({
-      where: { interviewerId, scheduledAt: { gte: now } },
-      include: {
-        application: {
-          include: {
-            candidate: { select: { id: true, name: true, email: true } },
-            job: { select: { id: true, title: true } },
-          },
-        },
-        feedback: { select: { id: true } },
-      },
-      orderBy: { scheduledAt: 'asc' },
-    });
-  }
-
-  async updateStatus(id: string, status: string) {
+  async updateStatus(interviewId: string, status: string) {
     return this.prisma.interview.update({
-      where: { id },
-      data: { status: status as any },
+      where: { id: interviewId },
+      data: { status },
     });
   }
 
-  async submitFeedback(interviewId: string, dto: CreateFeedbackDto, authorId: string) {
-    const interview = await this.prisma.interview.findUnique({ where: { id: interviewId } });
-    if (!interview) throw new NotFoundException('Entrevista não encontrada');
+  async submitFeedback(interviewId: string, authorId: string, dto: CreateFeedbackDto) {
     await this.prisma.interview.update({ where: { id: interviewId }, data: { status: 'COMPLETED' } });
+    const interview = await this.prisma.interview.findUnique({ where: { id: interviewId } });
     return this.prisma.feedback.create({
       data: { interviewId, applicationId: interview.applicationId, authorId, ...dto },
       include: { author: { select: { id: true, name: true } } },
     });
   }
 
-  async getFeedbackByApplication(applicationId: string) {
+  async getFeedbacksByApplication(applicationId: string) {
     return this.prisma.feedback.findMany({
       where: { applicationId },
-      include: { author: { select: { id: true, name: true } }, interview: true },
+      include: { author: { select: { id: true, name: true } } },
       orderBy: { createdAt: 'desc' },
     });
   }

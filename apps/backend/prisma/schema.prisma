@@ -40,36 +40,45 @@ enum Recommendation {
 model User {
   id            String         @id @default(cuid())
   email         String         @unique
-  password      String
+  passwordHash  String
   name          String
   role          Role           @default(RECRUITER)
+  avatarUrl     String?
+  isActive      Boolean        @default(true)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   refreshTokens RefreshToken[]
   interviews    Interview[]    @relation("Interviewer")
   feedbacks     Feedback[]
+  jobs          Job[]          @relation("Recruiter")
 }
 
 model RefreshToken {
-  id        String   @id @default(cuid())
-  token     String   @unique
+  id        String    @id @default(cuid())
+  token     String    @unique
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime
-  createdAt DateTime @default(now())
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
 }
 
 model Job {
   id           String        @id @default(cuid())
   title        String
   description  String?
+  requirements String?
   department   String?
   location     String?
   type         String        @default("FULL_TIME")
   status       JobStatus     @default(OPEN)
+  salaryMin    Float?
+  salaryMax    Float?
+  recruiterId  String?
+  recruiter    User?         @relation("Recruiter", fields: [recruiterId], references: [id])
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
-  stages       Stage[]
+  pipeline     Stage[]
   applications Application[]
 }
 
@@ -80,7 +89,7 @@ model Stage {
   color        String        @default("#6366f1")
   jobId        String
   job          Job           @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  applications Application[]
+  applications Application[] @relation("CurrentStage")
 }
 
 model Candidate {
@@ -89,8 +98,14 @@ model Candidate {
   email        String        @unique
   phone        String?
   linkedin     String?
+  linkedinUrl  String?
+  githubUrl    String?
+  portfolioUrl String?
   skills       String[]
   resumeUrl    String?
+  resumeText   String?
+  parsedResume Json?
+  aiSummary    String?
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   applications Application[]
@@ -103,12 +118,17 @@ model Application {
   jobId          String
   job            Job               @relation(fields: [jobId], references: [id])
   currentStageId String?
-  currentStage   Stage?            @relation(fields: [currentStageId], references: [id])
+  currentStage   Stage?            @relation("CurrentStage", fields: [currentStageId], references: [id])
   status         ApplicationStatus @default(ACTIVE)
+  aiScore        Float?
+  notes          String?
+  appliedAt      DateTime          @default(now())
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
   interviews     Interview[]
   feedbacks      Feedback[]
+
+  @@unique([jobId, candidateId])
 }
 
 model Interview {
@@ -121,18 +141,25 @@ model Interview {
   duration      Int         @default(60)
   type          String      @default("VIDEO")
   meetLink      String?
+  meetingUrl    String?
+  status        String      @default("SCHEDULED")
   notes         String?
   createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  feedbacks     Feedback[]
 }
 
 model Feedback {
   id             String          @id @default(cuid())
   applicationId  String
   application    Application     @relation(fields: [applicationId], references: [id])
+  interviewId    String?
+  interview      Interview?      @relation(fields: [interviewId], references: [id])
   authorId       String
   author         User            @relation(fields: [authorId], references: [id])
   content        String
   rating         Int?
   recommendation Recommendation?
   createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 }

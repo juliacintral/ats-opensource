@@ -1,22 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { comparePassword, signAccessToken, signRefreshToken } from '@/lib/auth'
+import { hashPassword, signAccessToken, signRefreshToken } from '@/lib/auth'
 import { z } from 'zod'
 
 const schema = z.object({
+  name: z.string().min(2),
   email: z.string().email(),
-  password: z.string().min(1),
+  password: z.string().min(8),
 })
 
 export async function POST(req: NextRequest) {
   try {
     const body = schema.parse(await req.json())
 
-    const user = await prisma.user.findUnique({ where: { email: body.email } })
-    if (!user) return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
+    const exists = await prisma.user.findUnique({ where: { email: body.email } })
+    if (exists) return NextResponse.json({ error: 'Email already in use' }, { status: 409 })
 
-    const valid = await comparePassword(body.password, user.passwordHash)
-    if (!valid) return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
+    const user = await prisma.user.create({
+      data: {
+        name: body.name,
+        email: body.email,
+        passwordHash: await hashPassword(body.password),
+      },
+    })
 
     const accessToken = await signAccessToken({ sub: user.id, email: user.email, role: user.role })
     const refreshToken = await signRefreshToken({ sub: user.id })

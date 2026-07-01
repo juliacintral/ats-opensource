@@ -1,22 +1,58 @@
-import jwt from 'jsonwebtoken'
+import { SignJWT, jwtVerify } from 'jose'
 import bcrypt from 'bcryptjs'
-import { NextRequest } from 'next/server'
+import { cookies } from 'next/headers'
 
-const SECRET = process.env.JWT_SECRET || 'dev-secret'
+const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET ?? 'change-me')
+const REFRESH_SECRET = new TextEncoder().encode(process.env.REFRESH_TOKEN_SECRET ?? 'change-me-refresh')
 
-export const signToken = (p: { userId: string; email: string; role: string }) =>
-  jwt.sign(p, SECRET, { expiresIn: '7d' })
-
-export const verifyToken = (token: string) => {
-  try { return jwt.verify(token, SECRET) as { userId: string; email: string; role: string } }
-  catch { return null }
+export async function hashPassword(password: string) {
+  return bcrypt.hash(password, 12)
 }
 
-export const hashPassword = (p: string) => bcrypt.hash(p, 10)
-export const comparePassword = (p: string, h: string) => bcrypt.compare(p, h)
+export async function comparePassword(password: string, hash: string) {
+  return bcrypt.compare(password, hash)
+}
 
-export function requireAuth(req: NextRequest) {
-  const auth = req.headers.get('authorization')
-  const token = auth?.startsWith('Bearer ') ? auth.slice(7) : null
-  return token ? verifyToken(token) : null
+export async function signAccessToken(payload: { sub: string; email: string; role: string }) {
+  return new SignJWT(payload)
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime(process.env.JWT_EXPIRES_IN ?? '15m')
+    .sign(JWT_SECRET)
+}
+
+export async function signRefreshToken(payload: { sub: string }) {
+  return new SignJWT(payload)
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime(process.env.REFRESH_TOKEN_EXPIRES_IN ?? '7d')
+    .sign(REFRESH_SECRET)
+}
+
+export async function verifyAccessToken(token: string) {
+  const { payload } = await jwtVerify(token, JWT_SECRET)
+  return payload as { sub: string; email: string; role: string }
+}
+
+export async function verifyRefreshToken(token: string) {
+  const { payload } = await jwtVerify(token, REFRESH_SECRET)
+  return payload as { sub: string }
+}
+
+export async function getSession() {
+  const cookieStore = cookies()
+  const token = cookieStore.get('access_token')?.value
+  if (!token) return null
+  try {
+    return await verifyAccessToken(token)
+  } catch {
+    return null
+  }
+}
+
+export function requireSession(session: Awaited<ReturnType<typeof getSession>>) {
+  if (!session) {
+    throw new Error('Unauthorized')
+  }
+  return session
 }

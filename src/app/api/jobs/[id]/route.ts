@@ -1,27 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireAuth } from '@/lib/auth'
+import { withAuth } from '@/lib/middleware'
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
-  const p = requireAuth(req)
-  if (!p) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  const { error } = await withAuth(req)
+  if (error) return error
+
   const job = await prisma.job.findUnique({
     where: { id: params.id },
-    include: { stages: { orderBy: { order: 'asc' }, include: { applications: { include: { candidate: true } } } } },
+    include: {
+      stages: { orderBy: { order: 'asc' } },
+      applications: {
+        include: { candidate: true, stage: true, feedbacks: true },
+      },
+    },
   })
-  return job ? NextResponse.json(job) : NextResponse.json({ error: 'Não encontrada' }, { status: 404 })
+
+  if (!job) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  return NextResponse.json(job)
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
-  const p = requireAuth(req)
-  if (!p) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
-  const data = await req.json()
-  return NextResponse.json(await prisma.job.update({ where: { id: params.id }, data }))
+  const { error } = await withAuth(req)
+  if (error) return error
+
+  const body = await req.json()
+  const job = await prisma.job.update({
+    where: { id: params.id },
+    data: body,
+  })
+  return NextResponse.json(job)
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
-  const p = requireAuth(req)
-  if (!p) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  const { error } = await withAuth(req)
+  if (error) return error
+
   await prisma.job.delete({ where: { id: params.id } })
-  return NextResponse.json({ success: true })
+  return NextResponse.json({ ok: true })
 }

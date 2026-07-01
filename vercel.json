@@ -1,1 +1,6 @@
-{\n  "buildCommand": "npm run build",\n  "outputDirectory": ".next",\n  "framework": "nextjs",\n  "installCommand": "npm install"\n}\n
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "framework": "nextjs",
+  "installCommand": "npm install"
+}

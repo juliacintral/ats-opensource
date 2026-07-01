@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { withAuth } from '@/lib/middleware'
+import { withAuth } from '@/lib/auth'
 import { z } from 'zod'
 
 const schema = z.object({
@@ -10,16 +10,20 @@ const schema = z.object({
   interviewId: z.string().optional(),
 })
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const { session, error } = await withAuth(req)
   if (error) return error
 
   try {
+    const { id } = await params
     const body = schema.parse(await req.json())
     const feedback = await prisma.feedback.create({
       data: {
-        applicationId: params.id,
-        authorId: session!.sub,
+        applicationId: id,
+        authorId: session.sub,
         rating: body.rating,
         notes: body.notes,
         recommendation: body.recommendation,

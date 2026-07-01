@@ -4,73 +4,54 @@ import * as bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 Seeding database...');
+  console.log('Criando dados iniciais...');
 
-  const hash = await bcrypt.hash('Admin@12345', 10);
-
-  const admin = await prisma.user.upsert({
-    where: { email: 'admin@ats.local' },
+  const adminPassword = await bcrypt.hash('admin123', 10);
+  await prisma.user.upsert({
+    where: { email: 'admin@ats.com' },
     update: {},
-    create: {
-      name: 'Admin ATS',
-      email: 'admin@ats.local',
-      password: hash,
-      role: 'ADMIN',
-    },
+    create: { email: 'admin@ats.com', password: adminPassword, name: 'Admin', role: 'ADMIN' },
   });
 
-  const recruiter = await prisma.user.upsert({
-    where: { email: 'recruiter@ats.local' },
+  const recruiterPassword = await bcrypt.hash('recruiter123', 10);
+  await prisma.user.upsert({
+    where: { email: 'recruiter@ats.com' },
     update: {},
-    create: {
-      name: 'Ana Recruiter',
-      email: 'recruiter@ats.local',
-      password: await bcrypt.hash('Recruiter@12345', 10),
-      role: 'RECRUITER',
-    },
+    create: { email: 'recruiter@ats.com', password: recruiterPassword, name: 'Recrutador', role: 'RECRUITER' },
   });
 
-  const job = await prisma.job.upsert({
-    where: { id: 'seed-job-001' },
-    update: {},
-    create: {
-      id: 'seed-job-001',
-      title: 'Engenheiro(a) de Software Sênior',
+  await prisma.job.create({
+    data: {
+      title: 'Desenvolvedor Full Stack',
+      description: 'Vaga para desenvolvedor com experiencia em React e Node.js',
       department: 'Tecnologia',
-      location: 'São Paulo, SP',
-      isRemote: true,
+      location: 'Remoto',
       status: 'OPEN',
-      salaryMin: 10000,
-      salaryMax: 16000,
-      salaryCurrency: 'BRL',
-      description: 'Vaga de exemplo criada pelo seed para testes E2E.',
-      recruiterId: recruiter.id,
-      pipeline: {
+      stages: {
         create: [
-          { name: 'Triagem', order: 1 },
-          { name: 'Entrevista RH', order: 2 },
-          { name: 'Entrevista Técnica', order: 3 },
-          { name: 'Proposta', order: 4 },
+          { name: 'Triagem', order: 0, color: '#6366f1' },
+          { name: 'Entrevista RH', order: 1, color: '#f59e0b' },
+          { name: 'Entrevista Tecnica', order: 2, color: '#3b82f6' },
+          { name: 'Oferta', order: 3, color: '#10b981' },
         ],
       },
     },
   });
 
-  const candidate = await prisma.candidate.upsert({
-    where: { email: 'candidato@ats.local' },
+  await prisma.candidate.upsert({
+    where: { email: 'candidato@email.com' },
     update: {},
     create: {
-      name: 'Carlos Candidato',
-      email: 'candidato@ats.local',
-      phone: '+55 11 91234-5678',
-      location: 'São Paulo, SP',
-      source: 'MANUAL',
-      skills: ['TypeScript', 'Node.js', 'React', 'PostgreSQL'],
-      aiSummary: 'Desenvolvedor full stack com 5 anos de experiência em TypeScript e Node.js.',
+      name: 'Joao Silva',
+      email: 'candidato@email.com',
+      phone: '11999999999',
+      skills: ['React', 'Node.js', 'TypeScript'],
     },
   });
 
-  console.log('✅ Seed concluído:', { admin: admin.email, recruiter: recruiter.email, job: job.title, candidate: candidate.name });
+  console.log('Seed concluido!');
+  console.log('admin@ats.com / admin123');
+  console.log('recruiter@ats.com / recruiter123');
 }
 
-main().catch((e) => { console.error(e); process.exit(1); }).finally(() => prisma.$disconnect());
+main().catch(console.error).finally(() => prisma.$disconnect());

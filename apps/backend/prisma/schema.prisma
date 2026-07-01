@@ -3,15 +3,16 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
-enum UserRole {
+enum Role {
   ADMIN
   RECRUITER
   HIRING_MANAGER
-  CANDIDATE
+  INTERVIEWER
 }
 
 enum JobStatus {
@@ -22,169 +23,116 @@ enum JobStatus {
 }
 
 enum ApplicationStatus {
-  APPLIED
-  SCREENING
-  INTERVIEW
-  OFFER
+  ACTIVE
   HIRED
   REJECTED
+  WITHDRAWN
 }
 
-enum InterviewType {
-  PHONE
-  VIDEO
-  ONSITE
-  TECHNICAL
-}
-
-enum InterviewStatus {
-  SCHEDULED
-  COMPLETED
-  CANCELLED
-  NO_SHOW
+enum Recommendation {
+  STRONG_YES
+  YES
+  NEUTRAL
+  NO
+  STRONG_NO
 }
 
 model User {
-  id           String   @id @default(uuid())
-  name         String
-  email        String   @unique
-  passwordHash String
-  role         UserRole @default(RECRUITER)
-  avatarUrl    String?
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  jobs             Job[]           @relation("JobRecruiter")
-  interviews       Interview[]     @relation("Interviewer")
-  feedbacks        Feedback[]
-  refreshTokens    RefreshToken[]
-
-  @@map("users")
+  id            String         @id @default(cuid())
+  email         String         @unique
+  password      String
+  name          String
+  role          Role           @default(RECRUITER)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  refreshTokens RefreshToken[]
+  interviews    Interview[]    @relation("Interviewer")
+  feedbacks     Feedback[]
 }
 
 model RefreshToken {
-  id        String   @id @default(uuid())
+  id        String   @id @default(cuid())
   token     String   @unique
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime
   createdAt DateTime @default(now())
-
-  @@map("refresh_tokens")
 }
 
 model Job {
-  id            String    @id @default(uuid())
-  title         String
-  description   String
-  requirements  String?
-  location      String?
-  isRemote      Boolean   @default(false)
-  salaryMin     Decimal?
-  salaryMax     Decimal?
-  salaryCurrency String?  @default("BRL")
-  department    String?
-  status        JobStatus @default(DRAFT)
-  recruiterId   String
-  recruiter     User      @relation("JobRecruiter", fields: [recruiterId], references: [id])
-  pipeline      Stage[]
-  applications  Application[]
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  @@map("jobs")
+  id           String        @id @default(cuid())
+  title        String
+  description  String?
+  department   String?
+  location     String?
+  type         String        @default("FULL_TIME")
+  status       JobStatus     @default(OPEN)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  stages       Stage[]
+  applications Application[]
 }
 
 model Stage {
-  id           String        @id @default(uuid())
+  id           String        @id @default(cuid())
   name         String
   order        Int
+  color        String        @default("#6366f1")
   jobId        String
   job          Job           @relation(fields: [jobId], references: [id], onDelete: Cascade)
   applications Application[]
-  createdAt    DateTime      @default(now())
-
-  @@unique([jobId, order])
-  @@map("stages")
 }
 
 model Candidate {
-  id           String   @id @default(uuid())
+  id           String        @id @default(cuid())
   name         String
-  email        String   @unique
+  email        String        @unique
   phone        String?
-  linkedinUrl  String?
-  githubUrl    String?
-  portfolioUrl String?
+  linkedin     String?
+  skills       String[]
   resumeUrl    String?
-  resumeText   String?  // Extracted text from resume PDF
-  parsedResume Json?    // Structured data from AI parsing
-  aiSummary    String?  // AI-generated candidate summary
-  source       String?  // LinkedIn, Referral, Job Board, etc.
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
   applications Application[]
-
-  @@map("candidates")
 }
 
 model Application {
-  id          String            @id @default(uuid())
-  jobId       String
-  job         Job               @relation(fields: [jobId], references: [id])
-  candidateId String
-  candidate   Candidate         @relation(fields: [candidateId], references: [id])
-  stageId     String?
-  stage       Stage?            @relation(fields: [stageId], references: [id])
-  status      ApplicationStatus @default(APPLIED)
-  aiScore     Float?            // AI ranking score 0-100
-  notes       String?
-  appliedAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-
-  interviews  Interview[]
-  feedbacks   Feedback[]
-
-  @@unique([jobId, candidateId])
-  @@map("applications")
+  id             String            @id @default(cuid())
+  candidateId    String
+  candidate      Candidate         @relation(fields: [candidateId], references: [id])
+  jobId          String
+  job            Job               @relation(fields: [jobId], references: [id])
+  currentStageId String?
+  currentStage   Stage?            @relation(fields: [currentStageId], references: [id])
+  status         ApplicationStatus @default(ACTIVE)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  interviews     Interview[]
+  feedbacks      Feedback[]
 }
 
 model Interview {
-  id            String          @id @default(uuid())
+  id            String      @id @default(cuid())
   applicationId String
-  application   Application     @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  application   Application @relation(fields: [applicationId], references: [id])
   interviewerId String
-  interviewer   User            @relation("Interviewer", fields: [interviewerId], references: [id])
-  type          InterviewType   @default(VIDEO)
-  status        InterviewStatus @default(SCHEDULED)
+  interviewer   User        @relation("Interviewer", fields: [interviewerId], references: [id])
   scheduledAt   DateTime
-  durationMin   Int             @default(60)
-  meetingUrl    String?         // Google Meet / Teams link
+  duration      Int         @default(60)
+  type          String      @default("VIDEO")
+  meetLink      String?
   notes         String?
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-
-  feedback      Feedback?
-
-  @@map("interviews")
+  createdAt     DateTime    @default(now())
 }
 
 model Feedback {
-  id            String      @id @default(uuid())
-  applicationId String
-  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-  interviewId   String?     @unique
-  interview     Interview?  @relation(fields: [interviewId], references: [id])
-  authorId      String
-  author        User        @relation(fields: [authorId], references: [id])
-  rating        Int         // 1-5
-  recommendation String     // STRONG_YES, YES, NO, STRONG_NO
-  strengths     String?
-  weaknesses    String?
-  notes         String?
-  createdAt     DateTime    @default(now())
-
-  @@map("feedbacks")
+  id             String          @id @default(cuid())
+  applicationId  String
+  application    Application     @relation(fields: [applicationId], references: [id])
+  authorId       String
+  author         User            @relation(fields: [authorId], references: [id])
+  content        String
+  rating         Int?
+  recommendation Recommendation?
+  createdAt      DateTime        @default(now())
 }

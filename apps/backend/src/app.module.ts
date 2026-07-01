@@ -1,23 +1,18 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-
 import { PrismaModule } from './prisma/prisma.module';
-import { AuthModule } from './modules/auth/auth.module';
-import { UsersModule } from './modules/users/users.module';
-import { JobsModule } from './modules/jobs/jobs.module';
-import { CandidatesModule } from './modules/candidates/candidates.module';
-import { ApplicationsModule } from './modules/applications/applications.module';
-import { InterviewsModule } from './modules/interviews/interviews.module';
-import { StorageModule } from './modules/storage/storage.module';
-import { EmailModule } from './modules/email/email.module';
-import { AIModule } from './modules/ai/ai.module';
+import { AuthModule } from './auth/auth.module';
+import { UsersModule } from './users/users.module';
+import { JobsModule } from './jobs/jobs.module';
+import { CandidatesModule } from './candidates/candidates.module';
+import { ApplicationsModule } from './applications/applications.module';
+import { InterviewsModule } from './interviews/interviews.module';
+import { FeedbackModule } from './feedback/feedback.module';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({
-      isGlobal: true,
-      expandVariables: true,
-    }),
+    ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
     AuthModule,
     UsersModule,
@@ -25,9 +20,8 @@ import { AIModule } from './modules/ai/ai.module';
     CandidatesModule,
     ApplicationsModule,
     InterviewsModule,
-    StorageModule,
-    EmailModule,
-    AIModule,
+    FeedbackModule,
+    HealthModule,
   ],
 })
 export class AppModule {}

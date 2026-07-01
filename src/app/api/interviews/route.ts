@@ -11,6 +11,22 @@ const schema = z.object({
   meetUrl: z.string().url().optional(),
 })
 
+export async function GET(req: NextRequest) {
+  const { session, error } = await withAuth(req)
+  if (error) return error
+
+  const interviews = await prisma.interview.findMany({
+    where: { interviewerId: session!.sub },
+    include: {
+      application: { include: { candidate: true, job: true } },
+      interviewer: true,
+    },
+    orderBy: { scheduledAt: 'asc' },
+  })
+
+  return NextResponse.json(interviews)
+}
+
 export async function POST(req: NextRequest) {
   const { error } = await withAuth(req)
   if (error) return error
@@ -31,14 +47,13 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    // Send notification email (best-effort)
     sendEmail({
       to: interview.application.candidate.email,
-      subject: `Interview scheduled for ${interview.application.job.title}`,
-      html: `<p>Hi ${interview.application.candidate.name},</p>
-             <p>Your interview for <strong>${interview.application.job.title}</strong> is scheduled for
-             <strong>${new Date(interview.scheduledAt).toLocaleString()}</strong>.</p>
-             ${interview.meetUrl ? `<p><a href="${interview.meetUrl}">Join meeting</a></p>` : ''}`,
+      subject: `Entrevista agendada — ${interview.application.job.title}`,
+      html: `<p>Olá ${interview.application.candidate.name},</p>
+             <p>Sua entrevista para <strong>${interview.application.job.title}</strong> foi agendada para
+             <strong>${new Date(interview.scheduledAt).toLocaleString('pt-BR')}</strong>.</p>
+             ${interview.meetUrl ? `<p><a href="${interview.meetUrl}">Entrar na reunião</a></p>` : ''}`,
     }).catch(() => {})
 
     return NextResponse.json(interview, { status: 201 })

@@ -1,59 +1,74 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import axios from 'axios'
-import Link from 'next/link'
 
-function Sidebar() {
-  const router = useRouter()
-  function logout() { localStorage.clear(); router.push('/login') }
-  const links = [{ href: '/dashboard', label: '📊 Dashboard' }, { href: '/jobs', label: '💼 Vagas' }, { href: '/candidates', label: '👥 Candidatos' }, { href: '/interviews', label: '📅 Entrevistas' }]
-  return (
-    <aside style={{ width: '220px', background: '#0f172a', color: 'white', minHeight: '100vh', padding: '1.5rem 1rem', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '2rem', padding: '0 0.5rem' }}>🎯 ATS</div>
-      <nav style={{ flex: 1 }}>
-        {links.map(l => <Link key={l.href} href={l.href} style={{ display: 'block', padding: '0.6rem 0.75rem', borderRadius: '8px', color: '#cbd5e1', textDecoration: 'none', marginBottom: '0.25rem', fontSize: '0.9rem' }}>{l.label}</Link>)}
-      </nav>
-      <button onClick={logout} style={{ background: 'none', border: '1px solid #334155', color: '#94a3b8', padding: '0.5rem', borderRadius: '8px', cursor: 'pointer', fontSize: '0.85rem' }}>Sair</button>
-    </aside>
-  )
+interface Interview {
+  id: string
+  scheduledAt: string
+  meetUrl: string | null
+  application: {
+    candidate: { name: string }
+    job: { title: string }
+  }
+  interviewer: { name: string }
 }
 
 export default function InterviewsPage() {
   const router = useRouter()
-  const [interviews, setInterviews] = useState<any[]>([])
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : ''
+  const [interviews, setInterviews] = useState<Interview[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!token) { router.push('/login'); return }
-    axios.get('/api/interviews', { headers: { Authorization: `Bearer ${token}` } }).then(r => setInterviews(r.data))
-  }, [])
+    fetch('/api/interviews', { credentials: 'include' })
+      .then(r => {
+        if (r.status === 401) { router.push('/login'); return null }
+        if (!r.ok) return []
+        return r.json()
+      })
+      .then(data => { if (data) setInterviews(data) })
+      .finally(() => setLoading(false))
+  }, [router])
+
+  if (loading) return <div className="p-8 text-gray-500">Carregando...</div>
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: '#f8fafc' }}>
-      <Sidebar />
-      <main style={{ flex: 1, padding: '2rem' }}>
-        <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#0f172a', marginBottom: '1.5rem' }}>Entrevistas</h1>
-        <div style={{ display: 'grid', gap: '0.75rem' }}>
-          {interviews.map(i => (
-            <div key={i.id} style={{ background: 'white', borderRadius: '12px', padding: '1.25rem 1.5rem', boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+    <main className="p-8 max-w-4xl mx-auto">
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Entrevistas</h1>
+        <a href="/dashboard" className="text-sm text-teal-700 hover:underline">← Dashboard</a>
+      </div>
+
+      {interviews.length === 0 ? (
+        <p className="text-gray-400 text-sm">Nenhuma entrevista agendada.</p>
+      ) : (
+        <div className="space-y-3">
+          {interviews.map(iv => (
+            <div key={iv.id} className="bg-white border border-gray-200 rounded-xl p-4">
+              <div className="flex items-center justify-between">
                 <div>
-                  <div style={{ fontWeight: 600, color: '#0f172a' }}>{i.application.candidate.name}</div>
-                  <div style={{ color: '#64748b', fontSize: '0.875rem', marginTop: '0.2rem' }}>{i.application.job.title}</div>
-                  <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: '0.2rem' }}>Com: {i.interviewer.name}</div>
+                  <p className="font-semibold text-gray-900">{iv.application.candidate.name}</p>
+                  <p className="text-sm text-gray-500">{iv.application.job.title} · Entrevistador: {iv.interviewer.name}</p>
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ background: '#e0f2fe', color: '#0369a1', padding: '0.2rem 0.6rem', borderRadius: '999px', fontSize: '0.8rem', fontWeight: 500 }}>{i.type}</div>
-                  <div style={{ color: '#475569', fontSize: '0.8rem', marginTop: '0.4rem' }}>{new Date(i.scheduledAt).toLocaleString('pt-BR')}</div>
+                <div className="text-right">
+                  <p className="text-sm font-medium text-gray-700">
+                    {new Date(iv.scheduledAt).toLocaleString('pt-BR')}
+                  </p>
+                  {iv.meetUrl && (
+                    <a
+                      href={iv.meetUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-teal-700 hover:underline"
+                    >
+                      Entrar na reunião →
+                    </a>
+                  )}
                 </div>
               </div>
-              {i.notes && <p style={{ margin: '0.75rem 0 0', color: '#64748b', fontSize: '0.875rem', background: '#f8fafc', padding: '0.5rem', borderRadius: '6px' }}>{i.notes}</p>}
             </div>
           ))}
-          {interviews.length === 0 && <p style={{ color: '#64748b', textAlign: 'center', padding: '3rem' }}>Nenhuma entrevista agendada.</p>}
         </div>
-      </main>
-    </div>
+      )}
+    </main>
   )
 }

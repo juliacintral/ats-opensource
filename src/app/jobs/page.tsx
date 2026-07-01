@@ -1,89 +1,99 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import axios from 'axios'
-import Link from 'next/link'
 
-function Sidebar() {
-  const router = useRouter()
-  function logout() { localStorage.clear(); router.push('/login') }
-  const links = [{ href: '/dashboard', label: '📊 Dashboard' }, { href: '/jobs', label: '💼 Vagas' }, { href: '/candidates', label: '👥 Candidatos' }, { href: '/interviews', label: '📅 Entrevistas' }]
-  return (
-    <aside style={{ width: '220px', background: '#0f172a', color: 'white', minHeight: '100vh', padding: '1.5rem 1rem', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '2rem', padding: '0 0.5rem' }}>🎯 ATS</div>
-      <nav style={{ flex: 1 }}>
-        {links.map(l => <Link key={l.href} href={l.href} style={{ display: 'block', padding: '0.6rem 0.75rem', borderRadius: '8px', color: '#cbd5e1', textDecoration: 'none', marginBottom: '0.25rem', fontSize: '0.9rem' }}>{l.label}</Link>)}
-      </nav>
-      <button onClick={logout} style={{ background: 'none', border: '1px solid #334155', color: '#94a3b8', padding: '0.5rem', borderRadius: '8px', cursor: 'pointer', fontSize: '0.85rem' }}>Sair</button>
-    </aside>
-  )
+interface Job {
+  id: string
+  title: string
+  status: string
+  location: string | null
+  _count: { applications: number }
 }
 
 export default function JobsPage() {
   const router = useRouter()
-  const [jobs, setJobs] = useState<any[]>([])
-  const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ title: '', department: '', location: '', description: '' })
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : ''
-  const headers = { Authorization: `Bearer ${token}` }
+  const [jobs, setJobs] = useState<Job[]>([])
+  const [loading, setLoading] = useState(true)
+  const [title, setTitle] = useState('')
+  const [creating, setCreating] = useState(false)
 
-  useEffect(() => {
-    if (!token) { router.push('/login'); return }
-    axios.get('/api/jobs', { headers }).then(r => setJobs(r.data))
-  }, [])
-
-  async function createJob(e: React.FormEvent) {
-    e.preventDefault()
-    const { data } = await axios.post('/api/jobs', form, { headers })
-    setJobs([data, ...jobs])
-    setShowForm(false)
-    setForm({ title: '', department: '', location: '', description: '' })
+  function fetchJobs() {
+    fetch('/api/jobs', { credentials: 'include' })
+      .then(r => {
+        if (r.status === 401) { router.push('/login'); return null }
+        return r.json()
+      })
+      .then(data => { if (data) setJobs(data) })
+      .finally(() => setLoading(false))
   }
 
+  useEffect(() => { fetchJobs() }, []) // eslint-disable-line
+
+  async function createJob() {
+    if (!title.trim()) return
+    setCreating(true)
+    await fetch('/api/jobs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ title }),
+    })
+    setTitle('')
+    fetchJobs()
+    setCreating(false)
+  }
+
+  if (loading) return <div className="p-8 text-gray-500">Carregando...</div>
+
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: '#f8fafc' }}>
-      <Sidebar />
-      <main style={{ flex: 1, padding: '2rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>Vagas</h1>
-          <button onClick={() => setShowForm(true)} style={{ background: '#0ea5e9', color: 'white', border: 'none', borderRadius: '8px', padding: '0.6rem 1.25rem', cursor: 'pointer', fontWeight: 600 }}>+ Nova Vaga</button>
-        </div>
-        {showForm && (
-          <div style={{ background: 'white', borderRadius: '12px', padding: '1.5rem', marginBottom: '1.5rem', boxShadow: '0 1px 8px rgba(0,0,0,0.06)' }}>
-            <h2 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '1rem' }}>Nova Vaga</h2>
-            <form onSubmit={createJob}>
-              {(['title', 'department', 'location'] as const).map(f => (
-                <div key={f} style={{ marginBottom: '0.75rem' }}>
-                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.3rem', color: '#374151' }}>{f === 'title' ? 'Título *' : f === 'department' ? 'Departamento' : 'Local'}</label>
-                  <input value={form[f]} onChange={e => setForm({ ...form, [f]: e.target.value })} required={f === 'title'}
-                    style={{ width: '100%', padding: '0.5rem 0.75rem', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '0.9rem' }} />
-                </div>
-              ))}
-              <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.3rem', color: '#374151' }}>Descrição</label>
-                <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={3}
-                  style={{ width: '100%', padding: '0.5rem 0.75rem', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '0.9rem', resize: 'vertical' }} />
-              </div>
-              <div style={{ display: 'flex', gap: '0.75rem' }}>
-                <button type="submit" style={{ background: '#0ea5e9', color: 'white', border: 'none', borderRadius: '8px', padding: '0.6rem 1.25rem', cursor: 'pointer', fontWeight: 600 }}>Criar Vaga</button>
-                <button type="button" onClick={() => setShowForm(false)} style={{ background: '#f1f5f9', color: '#374151', border: 'none', borderRadius: '8px', padding: '0.6rem 1.25rem', cursor: 'pointer' }}>Cancelar</button>
-              </div>
-            </form>
-          </div>
-        )}
-        <div style={{ display: 'grid', gap: '1rem' }}>
-          {jobs.map(j => (
-            <div key={j.id} style={{ background: 'white', borderRadius: '12px', padding: '1.25rem 1.5rem', boxShadow: '0 1px 8px rgba(0,0,0,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <main className="p-8 max-w-4xl mx-auto">
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Vagas</h1>
+        <a href="/dashboard" className="text-sm text-teal-700 hover:underline">← Dashboard</a>
+      </div>
+
+      <div className="flex gap-2 mb-6">
+        <input
+          value={title}
+          onChange={e => setTitle(e.target.value)}
+          placeholder="Título da vaga"
+          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-600"
+          onKeyDown={e => e.key === 'Enter' && createJob()}
+        />
+        <button
+          onClick={createJob}
+          disabled={creating}
+          className="bg-teal-700 text-white px-4 py-2 rounded-lg text-sm hover:bg-teal-800 disabled:opacity-50"
+        >
+          {creating ? '...' : 'Nova vaga'}
+        </button>
+      </div>
+
+      <div className="space-y-3">
+        {jobs.length === 0 && <p className="text-gray-400 text-sm">Nenhuma vaga criada ainda.</p>}
+        {jobs.map(job => (
+          <a
+            key={job.id}
+            href={`/jobs/${job.id}`}
+            className="block bg-white border border-gray-200 rounded-xl p-4 hover:border-teal-400 transition"
+          >
+            <div className="flex items-center justify-between">
               <div>
-                <div style={{ fontWeight: 600, color: '#0f172a' }}>{j.title}</div>
-                <div style={{ color: '#64748b', fontSize: '0.875rem', marginTop: '0.25rem' }}>{j.department} {j.location ? `• ${j.location}` : ''} • {j._count.applications} candidatos</div>
+                <p className="font-semibold text-gray-900">{job.title}</p>
+                {job.location && <p className="text-sm text-gray-500">{job.location}</p>}
               </div>
-              <Link href={`/jobs/${j.id}`} style={{ background: '#f1f5f9', color: '#0f172a', border: 'none', borderRadius: '8px', padding: '0.5rem 1rem', cursor: 'pointer', textDecoration: 'none', fontSize: '0.875rem', fontWeight: 500 }}>Ver Pipeline →</Link>
+              <div className="text-right">
+                <span className={`text-xs px-2 py-1 rounded-full ${
+                  job.status === 'OPEN' ? 'bg-green-100 text-green-700' :
+                  job.status === 'DRAFT' ? 'bg-gray-100 text-gray-500' :
+                  'bg-red-100 text-red-600'
+                }`}>{job.status}</span>
+                <p className="text-xs text-gray-400 mt-1">{job._count.applications} candidatura(s)</p>
+              </div>
             </div>
-          ))}
-          {jobs.length === 0 && <p style={{ color: '#64748b', textAlign: 'center', padding: '3rem' }}>Nenhuma vaga criada ainda.</p>}
-        </div>
-      </main>
-    </div>
+          </a>
+        ))}
+      </div>
+    </main>
   )
 }

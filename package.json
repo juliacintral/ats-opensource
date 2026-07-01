@@ -12,15 +12,15 @@
     "db:studio": "prisma studio"
   },
   "dependencies": {
-    "@prisma/client": "^5.14.0",
+    "@prisma/client": "^5.22.0",
     "@supabase/supabase-js": "^2.43.0",
     "bcryptjs": "^2.4.3",
     "jose": "^5.3.0",
-    "next": "14.2.4",
+    "next": "15.3.3",
     "nodemailer": "^6.9.13",
     "pdf-parse": "^1.1.1",
-    "react": "^18",
-    "react-dom": "^18",
+    "react": "^19",
+    "react-dom": "^19",
     "zod": "^3.23.8"
   },
   "devDependencies": {
@@ -28,11 +28,11 @@
     "@types/node": "^20",
     "@types/nodemailer": "^6.4.15",
     "@types/pdf-parse": "^1.1.4",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
     "autoprefixer": "^10.0.1",
     "postcss": "^8",
-    "prisma": "^5.14.0",
+    "prisma": "^5.22.0",
     "tailwindcss": "^3.4.1",
     "typescript": "^5"
   }

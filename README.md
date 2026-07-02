@@ -1,6 +1,8 @@
 # ATS Open Source
 
-Aplicação ATS (Applicant Tracking System) open source construída com **Next.js 14 + Prisma + PostgreSQL**, hospedada integralmente no **Vercel** — sem nenhuma infraestrutura adicional.
+Um ATS completo rodando 100% de graça, sem infraestrutura adicional. Construdo com Next.js 14 + Prisma + PostgreSQL e feito pra subir no Vercel em menos de 5 minutos.
+
+A ideia foi simples: eu queria um sistema de rastreamento de candidatos que eu controlasse de ponta a ponta, sem pagar por licença nem depender de ferramenta de terceiro.
 
 ## Stack
 
@@ -17,21 +19,21 @@ Aplicação ATS (Applicant Tracking System) open source construída com **Next.j
 
 ## Deploy no Vercel (5 minutos)
 
-1. Fork este repositório
+1. Fork esse repositório
 2. Crie um banco no [Neon](https://neon.tech) ou [Supabase](https://supabase.com) (free)
 3. No Vercel → Import Project → selecione o fork
 4. Configure as variáveis de ambiente (copie de `.env.example`)
 5. Clique em **Deploy**
 
-## Variáveis de ambiente obrigatórias
+## Variáveis obrigatórias
 
 ```
-DATABASE_URL=       # Neon ou Supabase connection string
-JWT_SECRET=         # string aleatória longa
+DATABASE_URL=          # Neon ou Supabase connection string
+JWT_SECRET=            # string aleatória longa
 REFRESH_TOKEN_SECRET=
 ```
 
-## Rodando localmente
+## Rodando local
 
 ```bash
 npm install
@@ -59,9 +61,13 @@ npm run dev
 | POST | `/api/ai/rank` | Ranquear candidatos com IA |
 | GET | `/api/dashboard/stats` | Métricas do dashboard |
 
-## IA — troca de provedor
+## Trocando o provedor de IA
 
-Edite a variável `AI_PROVIDER` no `.env`:
+Edite `AI_PROVIDER` no `.env`:
 
-- `ollama` → Ollama local (padrão) — ideal para dev
-- `openrouter` → [OpenRouter](https://openrouter.ai) free tier — ideal para produção no Vercel
+- `ollama` → Ollama local (padrão) — melhor pra dev
+- `openrouter` → [OpenRouter](https://openrouter.ai) free tier — melhor pra produção no Vercel
+
+---
+
+Feito com ❤️ juliacintral
